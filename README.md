@@ -1,2 +1,2 @@
-# rshot
-Rotating Snapshot
+# Rotating Snapshot
+Rotating snapshotting using rsync

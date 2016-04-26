@@ -1,0 +1,202 @@
+#!/bin/sh
+# RShot: Rotating Snapshot
+# Rotating snapshotting using rsync
+#
+# Copyright (C) 2016 Costin STROIE <costinstroie@eridu.eu.org>
+
+# Load config file, first from $HOME, then from local directory
+[ -f "${HOME}/.rshot" ] && . "${HOME}/.rshot"
+[ -f "./rshot.cfg" ] && . "./rshot.cfg"
+
+if [ ! "${SOURCE}" ]
+then
+  echo "ERROR: No SOURCE defined."
+  exit 1
+fi
+if [ ! "${TARGET}" ]
+then
+  echo "ERROR: No TARGET defined."
+  exit 1
+fi
+
+# Configuration
+DAILY="${DAILY:-7}"
+WEEKLY="${WEEKLY:-4}"
+MONTHLY="${MONTHLY:-14}"
+
+# RSync default args
+RSYNC="${RSYNC:-rsync}"
+SPEED="${SPEED:-1000}"
+RSYNC_ARGS="--verbose --archive --partial --progress --human-readable --stats --bwlimit=${SPEED} --no-compress --delete --numeric-ids --delete-excluded"
+
+# Files
+PID_FILE="rshot.pid"
+
+
+# Check and save the PID
+PID=$$
+if [ -f "${PID_FILE}" ]
+then
+  read OLD_PID < "${PID_FILE}"
+  echo "Old PID ${OLD_PID}"
+  # Use /proc
+  if [ -d "/proc/${OLD_PID}" ]
+  then
+    echo "ERROR: rshot is already running, quitting..."
+    exit 2
+  fi
+fi
+
+# Base directory
+DIR="$PWD"
+
+# Title
+echo "Rotating Snapshot"
+echo "  Source: ${SOURCE}"
+echo "  Target: ${TARGET}"
+
+# Save the PID
+echo "Save PID ${PID} to PIDFILE ${PID_FILE}"
+echo "${PID}" > "${PID_FILE}"
+
+
+# Sync first to a temporary directory, then rotate
+echo "Let's rsync"
+# Create the current snapshot directory
+echo "  Create ${TARGET}.sync"
+mkdir -m 0755 -p "${TARGET}.sync"
+# Check if we can link dest
+if [ -d "${DIR}/${TARGET}.d1" ]
+then
+  RSYNC_ARGS="${RSYNC_ARGS} --link-dest=${DIR}/${TARGET}.d1"
+fi
+
+echo "Running: ${RSYNC} ${RSYNC_ARGS} \"${SOURCE}\" \"${DIR}/${TARGET}.sync\""
+${RSYNC} ${RSYNC_ARGS} "${SOURCE}" "${DIR}/${TARGET}.sync"
+RSCODE=$?
+if [ "${RSCODE}" != "0" ]
+then
+  echo "ERROR: rsync returned ${RSCODE}"
+  logger -i -p user.err -t rshot "Failed to sync ${SOURCE} to ${TARGET}. Error code ${RSCODE}."
+  rm "${PID_FILE}"
+  exit 3
+fi
+
+# Update timestamp
+touch "${TARGET}.sync"
+
+# The counters
+if [ -f "rshot.cnt" ]
+then
+  # Read the counters
+  read DCOUNT WCOUNT MCOUNT < "rshot.cnt"
+else
+  # Initialize the counters
+  DCOUNT=0
+  WCOUNT=0
+  MCOUNT=0
+fi
+
+echo
+# Check if we need to do weekly rotate
+if [ ${DCOUNT} -ge ${DAILY} ]
+then
+  # Reset the daily counter
+  DCOUNT=0
+
+  # Check if we need to do monthly rotate
+  if [ ${WCOUNT} -ge ${WEEKLY} ]
+  then
+    # Reset the weekly counter
+    WCOUNT=0
+
+    # Monthly stuff
+    echo "Monthly rotate"
+    # Remove the oldest monthly snapshot
+    if [ -d "${TARGET}.m${MONTHLY}" ]
+    then
+      echo "  Remove ${TARGET}.m${MONTHLY}"
+      rm -r "${TARGET}.m${MONTHLY}"
+    fi
+    # Rotate the monthly snapshots
+    for MONTH in $(seq ${MONTHLY} -1 2)
+    do
+      PMONTH=$(( MONTH-1 ))
+      if [ -d "${TARGET}.m${PMONTH}" ]
+      then
+        echo "  Rotate ${TARGET}.m${PMONTH} to ${TARGET}.m${MONTH}"
+        mv "${TARGET}.m${PMONTH}" "${TARGET}.m${MONTH}"
+      fi
+    done
+    # Move the last weekly to first monthly
+    echo "  Rotate ${TARGET}.w${WEEKLY} to ${TARGET}.m1"
+    mv "${TARGET}.w${WEEKLY}" "${TARGET}.m1"
+    # Increment the monthly counter
+    MCOUNT=$(( MCOUNT+1 ))
+  fi
+
+  # Weekly stuff
+  echo "Weekly rotate"
+  # Remove the oldest weekly snapshot
+  if [ -d "${TARGET}.w${WEEKLY}" ]
+  then
+    echo "  Remove ${TARGET}.w${WEEKLY}"
+    rm -r "${TARGET}.w${WEEKLY}"
+  fi
+  # Rotate the weekly snapshots
+  for WEEK in $(seq ${WEEKLY} -1 2)
+  do
+    PWEEK=$(( WEEK-1 ))
+    if [ -d "${TARGET}.w${PWEEK}" ]
+    then
+      echo "  Rotate ${TARGET}.w${PWEEK} to ${TARGET}.w${WEEK}"
+      mv "${TARGET}.w${PWEEK}" "${TARGET}.w${WEEK}"
+    fi
+  done
+  # Move the last daily to first weekly
+  echo "  Rotate ${TARGET}.d${DAILY} to ${TARGET}.w1"
+  mv "${TARGET}.d${DAILY}" "${TARGET}.w1"
+  # Increment the weekly counter
+  WCOUNT=$(( WCOUNT+1 ))
+fi
+
+# Daily stuff
+echo "Daily rotate"
+# Remove the oldest daily snapshot
+if [ -d "${TARGET}.d${DAILY}" ]
+then
+  echo "  Remove ${TARGET}.d${DAILY}"
+  rm -r "${TARGET}.d${DAILY}"
+fi
+# Rotate the daily snapshots
+for DAY in $(seq ${DAILY} -1 2)
+do
+  PDAY=$(( DAY-1 ))
+  if [ -d "${TARGET}.d${PDAY}" ]
+  then
+    echo "  Rotate ${TARGET}.d${PDAY} to ${TARGET}.d${DAY}"
+    mv "${TARGET}.d${PDAY}" "${TARGET}.d${DAY}"
+  fi
+done
+# Move the temporary sync directory to first daily
+echo "  Rotate ${TARGET}.sync to ${TARGET}.d1"
+mv "${TARGET}.sync" "${TARGET}.d1"
+# Increment the daily counter
+DCOUNT=$(( DCOUNT+1 ))
+
+
+# Counters
+echo "Counters"
+echo "    daily: ${DCOUNT} of ${DAILY}"
+echo "   weekly: ${WCOUNT} of ${WEEKLY}"
+echo "  monthly: ${MCOUNT} of ${MONTHLY}"
+echo "${DCOUNT} ${WCOUNT} ${MCOUNT}" > "rshot.cnt"
+
+# Logger
+logger -i -p user.notice -t rshot "Successful sync ${SOURCE} to ${TARGET}."
+
+# Remove the PID file
+echo "Remove PIDFILE ${PID_FILE}"
+rm "${PID_FILE}"
+
+# vim: set ft=sh ai ts=2 sts=2 et sw=2 sta nowrap nu :

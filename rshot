@@ -50,6 +50,12 @@ fi
 # Base directory
 DIR="$PWD"
 
+# Source path must end with a slash
+if echo "${SOURCE}" | grep -qv '/$'
+then
+  SOURCE="${SOURCE}/"
+fi
+
 # Title
 echo "Rotating Snapshot"
 echo "  Source: ${SOURCE}"
@@ -61,10 +67,15 @@ echo "${PID}" > "${PID_FILE}"
 
 
 # Sync first to a temporary directory, then rotate
-echo "Let's rsync"
-# Create the current snapshot directory
-echo "  Create ${TARGET}.sync"
-mkdir -m 0755 -p "${TARGET}.sync"
+if [ -d "${TARGET}.sync" ]
+then
+  # Last sync failed
+  echo "Last sync failed, trying to resume..."
+else
+  # Create the current snapshot directory
+  echo "Create ${TARGET}.sync"
+  mkdir -m 0755 -p "${TARGET}.sync"
+fi
 # Check if we can link dest
 if [ -d "${DIR}/${TARGET}.d1" ]
 then

@@ -88,7 +88,7 @@ RSCODE=$?
 if [ "${RSCODE}" != "0" ]
 then
   echo "ERROR: rsync returned ${RSCODE}"
-  logger -i -p user.err -t rshot "Failed to sync ${SOURCE} to ${TARGET}. Error code ${RSCODE}."
+  logger -p user.err -t rshot "Failed to sync ${SOURCE} to ${TARGET}. Error code ${RSCODE}."
   rm "${PID_FILE}"
   exit 3
 fi
@@ -204,7 +204,7 @@ echo "  monthly: ${MCOUNT} of ${MONTHLY}"
 echo "${DCOUNT} ${WCOUNT} ${MCOUNT}" > "rshot.cnt"
 
 # Logger
-logger -i -p user.notice -t rshot "Successful sync ${SOURCE} to ${TARGET}."
+logger -p user.notice -t rshot "Successfully sync'd ${SOURCE} to ${TARGET}."
 
 # Remove the PID file
 echo "Remove PIDFILE ${PID_FILE}"

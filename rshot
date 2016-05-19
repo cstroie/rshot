@@ -203,6 +203,10 @@ echo "   weekly: ${WCOUNT} of ${WEEKLY}"
 echo "  monthly: ${MCOUNT} of ${MONTHLY}"
 echo "${DCOUNT} ${WCOUNT} ${MCOUNT}" > "rshot.cnt"
 
+# Space
+echo "Disk usage"
+du -shc ${TARGET}.*
+
 # Logger
 logger -p user.notice -t rshot "Successfully sync'd ${SOURCE} to ${TARGET}."
 

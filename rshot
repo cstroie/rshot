@@ -56,6 +56,12 @@ then
   SOURCE="${SOURCE}/"
 fi
 
+# If target is a relative path, prepend $PWD
+if echo "${TARGET}" | grep -qv '^/'
+then
+  DIR="$PWD/"
+fi
+
 # Title
 echo "Rotating Snapshot"
 echo "  Source: ${SOURCE}"
@@ -77,13 +83,13 @@ else
   mkdir -m 0755 -p "${TARGET}.sync"
 fi
 # Check if we can link dest
-if [ -d "${DIR}/${TARGET}.d1" ]
+if [ -d "${DIR}${TARGET}.d1" ]
 then
-  RSYNC_ARGS="${RSYNC_ARGS} --link-dest=${DIR}/${TARGET}.d1"
+  RSYNC_ARGS="${RSYNC_ARGS} --link-dest=${DIR}${TARGET}.d1"
 fi
 
-echo "Running: ${RSYNC} ${RSYNC_ARGS} \"${SOURCE}\" \"${DIR}/${TARGET}.sync\""
-${RSYNC} ${RSYNC_ARGS} "${SOURCE}" "${DIR}/${TARGET}.sync"
+echo "Running: ${RSYNC} ${RSYNC_ARGS} \"${SOURCE}\" \"${DIR}${TARGET}.sync\""
+${RSYNC} ${RSYNC_ARGS} "${SOURCE}" "${DIR}${TARGET}.sync"
 RSCODE=$?
 if [ "${RSCODE}" != "0" ]
 then

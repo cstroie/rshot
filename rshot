@@ -47,9 +47,6 @@ then
   fi
 fi
 
-# Base directory
-DIR="$PWD"
-
 # Source path must end with a slash
 if echo "${SOURCE}" | grep -qv '/$'
 then

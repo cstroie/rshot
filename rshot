@@ -4,6 +4,43 @@
 #
 # Copyright (C) 2016 Costin STROIE <costinstroie@eridu.eu.org>
 
+# If no running directory has been specified, search for it
+if [ ! "$1" ]
+then
+  # Find a level 1 local directory containing the configuration file
+  for I in `find . -mindepth 1 -maxdepth 1 -type d`
+  do
+    if [ -f "$I/rshot.cfg" -a ! -x "rshot" ]
+    then
+      # Run recursively, using the specified directory
+      $0 "$I"
+    fi
+  done
+  # Exit now, cannot go further
+  exit 0
+fi
+
+# Check the specified directory
+if [ -d "$1" ]
+then
+  if [ -f "$1/rshot.cfg" ]
+  then
+    if cd "$1"
+    then
+      echo "Working directory: $1"
+    else
+      echo "ERROR: Cannot enter the working directory."
+      exit 4
+    fi
+  else
+    echo "ERROR: No configuration file inside working directory."
+    exit 5
+  fi
+else
+  echo "ERROR: No directory: $1"
+  exit 4
+fi
+
 # Load config file, first from $HOME, then from local directory
 [ -f "${HOME}/.rshot" ] && . "${HOME}/.rshot"
 [ -f "./rshot.cfg" ] && . "./rshot.cfg"
@@ -47,13 +84,16 @@ then
   fi
 fi
 
-# Base directory
-DIR="$PWD"
-
 # Source path must end with a slash
 if echo "${SOURCE}" | grep -qv '/$'
 then
   SOURCE="${SOURCE}/"
+fi
+
+# If target is a relative path, prepend $PWD
+if echo "${TARGET}" | grep -qv '^/'
+then
+  DIR="$PWD/"
 fi
 
 # Title
@@ -77,13 +117,13 @@ else
   mkdir -m 0755 -p "${TARGET}.sync"
 fi
 # Check if we can link dest
-if [ -d "${DIR}/${TARGET}.d1" ]
+if [ -d "${DIR}${TARGET}.d1" ]
 then
-  RSYNC_ARGS="${RSYNC_ARGS} --link-dest=${DIR}/${TARGET}.d1"
+  RSYNC_ARGS="${RSYNC_ARGS} --link-dest=${DIR}${TARGET}.d1"
 fi
 
-echo "Running: ${RSYNC} ${RSYNC_ARGS} \"${SOURCE}\" \"${DIR}/${TARGET}.sync\""
-${RSYNC} ${RSYNC_ARGS} "${SOURCE}" "${DIR}/${TARGET}.sync"
+echo "Running: ${RSYNC} ${RSYNC_ARGS} \"${SOURCE}\" \"${DIR}${TARGET}.sync\""
+${RSYNC} ${RSYNC_ARGS} "${SOURCE}" "${DIR}${TARGET}.sync"
 RSCODE=$?
 if [ "${RSCODE}" != "0" ]
 then
